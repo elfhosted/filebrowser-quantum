@@ -13,6 +13,7 @@ type ItemInfo struct {
 	Type       string    `json:"type"`       // type of the file, either "directory" or a file mimetype
 	Hidden     bool      `json:"hidden"`     // whether the file is hidden
 	HasPreview bool      `json:"hasPreview"` // whether the file has a thumbnail preview
+	IsSymlink  bool      `json:"isSymlink"`  // whether the item is a symlink (target may be dir or file)
 }
 
 // FileInfo describes a file.

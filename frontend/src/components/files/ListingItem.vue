@@ -36,6 +36,7 @@
         :thumbnailUrl="isThumbnailInView ? thumbnailUrl : ''"
         :filename="name"
         :hasPreview="hasPreview"
+        :isSymlink="isSymlink"
       />
     </div>
 
@@ -109,6 +110,7 @@ export default {
     "reducedOpacity",
     "hash",
     "hasPreview",
+    "isSymlink",
   ],
   computed: {
     galleryView() {

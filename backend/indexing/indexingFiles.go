@@ -220,6 +220,7 @@ func (idx *Index) GetFsDirInfo(adjustedPath string) (*iteminfo.FileInfo, error) 
 				Name:    filepath.Base(originalPath),
 				Size:    dirInfo.Size(),
 				ModTime: dirInfo.ModTime(),
+				IsSymlink: dirInfo.Mode()&os.ModeSymlink != 0,
 			},
 		}
 		fileInfo.DetectType(realPath, false)
@@ -293,6 +294,31 @@ func (idx *Index) GetDirInfo(dirInfo *os.File, stat os.FileInfo, realPath, adjus
 	for _, file := range files {
 		hidden := isHidden(file, idx.Path+combinedPath)
 		isDir := iteminfo.IsDirectory(file)
+		// If symlink support is enabled and this entry is a symlink, resolve to determine type
+		if settings.Config.Server.Filesystem.FollowSymlinks && file.Mode()&os.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(filepath.Join(realPath, file.Name()))
+			if err == nil {
+				// Resolve relative links against the directory
+				resolved := filepath.Join(realPath, linkTarget)
+				// Escape check: ensure target stays within source root unless allowed
+				if !settings.Config.Server.Filesystem.AllowSymlinkEscape {
+					root := strings.TrimRight(idx.Path, string(filepath.Separator)) + string(filepath.Separator)
+					// Use EvalSymlinks to get absolute target
+					absTarget, err2 := filepath.EvalSymlinks(resolved)
+					if err2 == nil {
+						absTarget = strings.TrimRight(absTarget, string(filepath.Separator)) + string(filepath.Separator)
+						if !strings.HasPrefix(absTarget, root) {
+							// Skip symlink that escapes the source
+							continue
+						}
+					}
+				}
+				// Stat the resolved target to determine if it's a directory
+				if targetInfo, err3 := os.Stat(resolved); err3 == nil {
+					isDir = iteminfo.IsDirectory(targetInfo)
+				}
+			}
+		}
 		baseName := file.Name()
 		fullCombined := combinedPath + baseName
 		if adjustedPath == "/" {
@@ -317,6 +343,8 @@ func (idx *Index) GetDirInfo(dirInfo *os.File, stat os.FileInfo, realPath, adjus
 			ModTime: file.ModTime(),
 			Hidden:  hidden,
 		}
+		// Tag symlinks for UI indication
+		itemInfo.IsSymlink = file.Mode()&os.ModeSymlink != 0
 
 		if isDir {
 			dirPath := combinedPath + file.Name()
@@ -443,23 +471,43 @@ func (idx *Index) recursiveUpdateDirSizes(childInfo *iteminfo.FileInfo, previous
 func (idx *Index) GetRealPath(relativePath ...string) (string, bool, error) {
 	combined := append([]string{idx.Path}, relativePath...)
 	joinedPath := filepath.Join(combined...)
-	isDir, _ := IsDirCache.Get(joinedPath + ":isdir")
+	isDirCached, _ := IsDirCache.Get(joinedPath + ":isdir")
 	cached, ok := RealPathCache.Get(joinedPath)
 	if ok && cached != "" {
-		return cached, isDir, nil
+		return cached, isDirCached, nil
 	}
 	// Convert relative path to absolute path
 	absolutePath, err := filepath.Abs(joinedPath)
 	if err != nil {
 		return absolutePath, false, fmt.Errorf("could not get real path: %v, %s", joinedPath, err)
 	}
-	// Resolve symlinks and get the real path
-	realPath, isDir, err := iteminfo.ResolveSymlinks(absolutePath)
+	// Resolve symlinks and get the real path if enabled
+	var realPath string
+	var realIsDir bool
+	if settings.Config.Server.Filesystem.FollowSymlinks {
+		realPath, realIsDir, err = iteminfo.ResolveSymlinks(absolutePath)
+		// If escape is not allowed, enforce that resolved path is within source root
+		if err == nil && !settings.Config.Server.Filesystem.AllowSymlinkEscape {
+			root := strings.TrimRight(idx.Path, string(filepath.Separator)) + string(filepath.Separator)
+			rp := strings.TrimRight(realPath, string(filepath.Separator)) + string(filepath.Separator)
+			if !strings.HasPrefix(rp, root) {
+				return realPath, realIsDir, fmt.Errorf("symlink resolves outside source root: %s", realPath)
+			}
+		}
+	} else {
+		// No symlink following: use Lstat to detect type, return the absolute path as-is
+		info, lerr := os.Lstat(absolutePath)
+		if lerr != nil {
+			return absolutePath, false, lerr
+		}
+		realIsDir = iteminfo.IsDirectory(info)
+		realPath = absolutePath
+	}
 	if err == nil {
 		RealPathCache.Set(joinedPath, realPath)
-		IsDirCache.Set(joinedPath+":isdir", isDir)
+		IsDirCache.Set(joinedPath+":isdir", realIsDir)
 	}
-	return realPath, isDir, err
+	return realPath, realIsDir, err
 }
 
 func (idx *Index) RefreshFileInfo(opts utils.FileOptions) error {

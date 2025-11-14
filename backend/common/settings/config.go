@@ -552,6 +552,8 @@ func setDefaults(generate bool) Settings {
 			Filesystem: Filesystem{
 				CreateFilePermission:      "644",
 				CreateDirectoryPermission: "755",
+				FollowSymlinks:            false,
+				AllowSymlinkEscape:        false,
 			},
 		},
 		Auth: Auth{

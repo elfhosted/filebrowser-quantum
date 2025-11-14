@@ -1,6 +1,13 @@
 server:
   port: 80
   baseURL:  "/"
+  filesystem:
+    # Unix permissions for created files/dirs
+    createFilePermission: "644"
+    createDirectoryPermission: "755"
+    # Symlink behavior (security-sensitive; opt-in)
+    followSymlinks: false
+    allowSymlinkEscape: false
   logging:
     - levels: "info|warning|error"
   sources:

@@ -57,6 +57,12 @@ type Server struct {
 type Filesystem struct {
 	CreateFilePermission      string `json:"createFilePermission" validate:"required,file_permission"`      // Unix permissions like 644, 755, 2755 (default: 644)
 	CreateDirectoryPermission string `json:"createDirectoryPermission" validate:"required,file_permission"` // Unix permissions like 755, 2755, 1777 (default: 755)
+	// FollowSymlinks enables traversal of symlinks for directory listings and access
+	// Default is false for security. Enable only if your environment is safe.
+	FollowSymlinks          bool   `json:"followSymlinks" yaml:"followSymlinks"`
+	// AllowSymlinkEscape permits symlinks to resolve outside the source root path.
+	// By default, symlink targets must remain within the source root. Use with care.
+	AllowSymlinkEscape      bool   `json:"allowSymlinkEscape" yaml:"allowSymlinkEscape"`
 }
 
 type Integrations struct {

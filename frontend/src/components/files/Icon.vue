@@ -26,6 +26,7 @@
   </span>
   <span v-else>
     <i :class="[classes, { active: active, clickable: clickable }]" class="icon"> {{ materialIcon }} </i>
+    <i v-if="isSymlink" class="material-icons symlink-overlay">link</i>
   </span>
 </template>
 
@@ -61,6 +62,10 @@ export default {
       default: "",
     },
     clickable: {
+      type: Boolean,
+      default: false,
+    },
+    isSymlink: {
       type: Boolean,
       default: false,
     },
@@ -335,6 +340,13 @@ export default {
 }
 .icon.active {
   background: var(--background);
+}
+.symlink-overlay {
+  position: absolute;
+  right: 0.15em;
+  bottom: 0.15em;
+  font-size: 0.9em;
+  opacity: 0.66;
 }
 .purple-icons {
   color: purple;

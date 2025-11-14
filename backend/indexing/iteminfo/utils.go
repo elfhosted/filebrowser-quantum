@@ -77,27 +77,38 @@ func (info *FileInfo) SortItems() {
 // ResolveSymlinks resolves symlinks in the given path and returns
 // the final resolved path, whether it's a directory (considering bundle logic), and any error.
 func ResolveSymlinks(path string) (string, bool, error) {
-	for {
-		// Get the file info using os.Lstat to handle symlinks
-		info, err := os.Lstat(path)
-		if err != nil {
-			return path, false, fmt.Errorf("could not stat path: %s, %v", path, err)
+	// Prefer using EvalSymlinks which handles cycles and relative targets robustly
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		info, statErr := os.Lstat(resolved)
+		if statErr != nil {
+			return resolved, false, fmt.Errorf("could not stat resolved path: %s, %v", resolved, statErr)
 		}
-
-		// Check if the path is a symlink
-		if info.Mode()&os.ModeSymlink != 0 {
-			// Read the symlink target
-			target, err := os.Readlink(path)
-			if err != nil {
-				return path, false, fmt.Errorf("could not read symlink: %s, %v", path, err)
-			}
-
-			// Resolve the symlink's target relative to its directory
-			path = filepath.Join(filepath.Dir(path), target)
-		} else {
-			// Not a symlink, check with bundle-aware directory logic
-			isDir := IsDirectory(info)
-			return path, isDir, nil
-		}
+		return resolved, IsDirectory(info), nil
 	}
+
+	// Fallback: manual resolution with cycle guard
+	seen := make(map[string]struct{})
+	current := path
+	for i := 0; i < 64; i++ { // hard cap to prevent infinite loops
+		if _, ok := seen[current]; ok {
+			return current, false, fmt.Errorf("symlink cycle detected at: %s", current)
+		}
+		seen[current] = struct{}{}
+
+		info, lerr := os.Lstat(current)
+		if lerr != nil {
+			return current, false, fmt.Errorf("could not stat path: %s, %v", current, lerr)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return current, IsDirectory(info), nil
+		}
+		target, rerr := os.Readlink(current)
+		if rerr != nil {
+			return current, false, fmt.Errorf("could not read symlink: %s, %v", current, rerr)
+		}
+		// Resolve the symlink's target relative to its directory
+		current = filepath.Join(filepath.Dir(current), target)
+	}
+	return current, false, fmt.Errorf("too many symlink hops resolving: %s", path)
 }

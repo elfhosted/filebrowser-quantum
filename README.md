@@ -146,3 +146,24 @@ Can browse archive files      | :construction: | ❌ | ❌ | ❌ | ❌ | ✅ |
 Can convert documents         | :construction: | ❌ | ❌ | ❌ | ❌ | ✅ |
 Can convert videos            | :construction: | ❌ | ❌ | ❌ | ❌ | ❌ |
 Can convert photos            | :construction: | ❌ | ❌ | ❌ | ❌ | ❌ |
+## Symlink support (opt-in)
+
+By default, FileBrowser Quantum does not traverse or list symbolic links for security. If your environment is safe and you want to enable symlinks, you can opt in via the server filesystem settings:
+
+- `server.filesystem.followSymlinks`: Enable traversal of symlinks when browsing. Default: false.
+- `server.filesystem.allowSymlinkEscape`: Permit symlink targets that resolve outside of the source root. Default: false (recommended). When false, symlinks resolving outside the source root are skipped.
+
+Example:
+
+```yaml
+server:
+  filesystem:
+    followSymlinks: true
+    allowSymlinkEscape: false
+```
+
+Notes:
+- Symlink cycles are detected and aborted.
+- When `allowSymlinkEscape` is false, symlinks that point outside the indexed source are ignored.
+- Symlink targets that are bundle-style directories (e.g., app bundles on macOS) are still treated according to bundle rules.
+
